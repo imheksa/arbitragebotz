@@ -36,15 +36,6 @@ export class OrcaClient implements DexClient {
     this.client = buildWhirlpoolClient(this.ctx);
   }
 
-  /**
-   * Fails fast with a clear message if the RPC endpoint is unreachable or
-   * misconfigured, instead of silently reporting "no pool found" forever
-   * (a missing pool and a dead RPC connection look identical otherwise).
-   */
-  async checkConnection(): Promise<void> {
-    await this.ctx.connection.getVersion();
-  }
-
   private async findPool(mintA: string, mintB: string): Promise<PublicKey | null> {
     const cacheKey = [mintA, mintB].sort().join(":");
     if (this.poolCache.has(cacheKey)) return this.poolCache.get(cacheKey) ?? null;

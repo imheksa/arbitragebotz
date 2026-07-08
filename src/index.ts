@@ -1,6 +1,10 @@
+import { Connection } from "@solana/web3.js";
 import { config, pairs } from "./config.js";
 import { RaydiumClient } from "./dex/raydiumClient.js";
 import { OrcaClient } from "./dex/orcaClient.js";
+import { MeteoraDlmmClient } from "./dex/meteoraDlmmClient.js";
+import { MeteoraDynamicAmmClient } from "./dex/meteoraDynamicAmmClient.js";
+import { PhoenixClient } from "./dex/phoenixClient.js";
 import { scanPair } from "./arbitrage/detector.js";
 import { simulateExecution } from "./arbitrage/simulator.js";
 import { logger } from "./logger.js";
@@ -34,16 +38,23 @@ async function main(): Promise<void> {
   logger.info(`Pairs: ${pairs.map((p) => p.name).join(", ")}`);
   logger.info(`Poll interval: ${config.pollIntervalMs}ms | min net profit: ${config.minProfitBps} bps`);
 
-  const orcaClient = new OrcaClient(config.rpcUrl);
   try {
-    await orcaClient.checkConnection();
+    await new Connection(config.rpcUrl, "confirmed").getVersion();
   } catch (err) {
     logger.error(
       `Cannot reach SOLANA_RPC_URL (${config.rpcUrl}): ${(err as Error).message}. ` +
-        `Orca quotes will silently return "no pool found" until this is fixed - check your .env.`,
+        `Every DEX except Raydium reads on-chain, so they will silently return "no pool found" ` +
+        `until this is fixed - check your .env.`,
     );
   }
-  const dexClients: DexClient[] = [new RaydiumClient(), orcaClient];
+
+  const dexClients: DexClient[] = [
+    new RaydiumClient(),
+    new OrcaClient(config.rpcUrl),
+    new MeteoraDlmmClient(config.rpcUrl),
+    new MeteoraDynamicAmmClient(config.rpcUrl),
+    new PhoenixClient(config.rpcUrl),
+  ];
 
   let running = true;
   process.on("SIGINT", () => {

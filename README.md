@@ -1,9 +1,9 @@
 # arbitragebotz
 
 Inter-DEX arbitrage **detection** bot for Solana tokens. It watches the same
-token pair across Raydium and Orca, and whenever the round-trip spread
-(buy on one DEX, sell on the other) clears a configurable threshold, it logs
-the opportunity.
+token pair across Raydium, Orca, Meteora DLMM, Meteora Dynamic AMM, and
+Phoenix, and whenever the round-trip spread (buy on one DEX, sell on
+another) clears a configurable threshold, it logs the opportunity.
 
 **This runs in simulation / paper-trading mode only.** It never builds,
 signs, or sends a transaction, and it never touches a private key or wallet
@@ -26,6 +26,13 @@ funds. It only reads public price data and prints/logs what a round trip
 
 ### Price sources
 
+All price sources use each DEX's official SDK. Except for Raydium, all of
+them read live on-chain state and therefore need a working
+`SOLANA_RPC_URL` — a dead/misconfigured RPC just makes those DEXes report
+"no pool found" for everything (the bot checks connectivity at startup and
+logs a clear error if the RPC is unreachable, so this should be obvious
+rather than silent).
+
 - **Raydium**: Raydium's public pools API (via the official SDK's `Api`
   client — a plain HTTP client, no RPC connection required). The swap
   output is approximated with the constant-product AMM formula against the
@@ -33,7 +40,21 @@ funds. It only reads public price data and prints/logs what a round trip
   pools and an approximation for concentrated-liquidity (CLMM) pools.
 - **Orca**: read directly on-chain via the official Whirlpool SDK
   (`swapQuoteByInputToken`), which does exact concentrated-liquidity swap
-  math. This needs a working Solana RPC endpoint (`SOLANA_RPC_URL`).
+  math. Only "standard" (non-adaptive-fee) whirlpools are checked.
+- **Meteora DLMM**: read directly on-chain via the official DLMM SDK
+  (`swapQuote`), exact bin math. Pool discovery has no mint filter in the
+  SDK, so the *first* quote call fetches every DLMM pool on the whole
+  program once (cached after that) — expect it to be slow, and to need an
+  RPC endpoint that permits large `getProgramAccounts` responses (most
+  paid providers do; many free public endpoints don't).
+- **Meteora Dynamic AMM**: read directly on-chain via the official Dynamic
+  AMM SDK (`getSwapQuote`), exact constant-product/stable-swap math. Pool
+  discovery uses a mint-filtered on-chain scan (`searchPoolsByToken`),
+  much cheaper than DLMM's approach.
+- **Phoenix**: an order book, not an AMM — quotes come from walking the
+  live book (`getUiLadder` + the SDK's router helpers) rather than reserve
+  math. Only covers the curated, comparatively small set of markets the
+  SDK ships with; pairs it doesn't list just quietly contribute no quote.
 
 ## Setup
 
@@ -54,16 +75,18 @@ You should see log lines like:
 [...] INFO  OPPORTUNITY SOL/USDT: buy on Raydium, sell on Orca | in 1 -> out 1.0021 | net 18.30 bps (gross 28.30 bps)
 ```
 
-> This project was scaffolded and typechecked in a sandboxed environment
-> with no outbound access to Solana RPC endpoints or DEX APIs, so the
-> network calls above could not be exercised live. Run it locally with a
-> real RPC URL and confirm the numbers look sane before relying on it.
+> This project was built and typechecked in a sandboxed environment with no
+> outbound access to Solana RPC endpoints or DEX APIs, so the network calls
+> above could not be exercised live (verified instead that the process
+> starts, loops, and every DEX client fails gracefully rather than
+> crashing when its network calls are blocked). Run it locally with a real
+> RPC URL and confirm the numbers look sane before relying on it.
 
 ## Configuration (`.env`)
 
 | Variable                  | Default                              | Meaning                                              |
 | -------------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `SOLANA_RPC_URL`           | `https://api.mainnet-beta.solana.com` | RPC endpoint used for Orca on-chain reads             |
+| `SOLANA_RPC_URL`           | `https://api.mainnet-beta.solana.com` | RPC endpoint used for all on-chain reads (everything except Raydium) |
 | `POLL_INTERVAL_MS`         | `15000`                               | How often to rescan all pairs                         |
 | `MIN_PROFIT_BPS`           | `15`                                  | Minimum net spread (bps) to log as an opportunity     |
 | `ASSUMED_COST_BUFFER_BPS`  | `10`                                  | Flat buffer subtracted from gross spread (see below)  |
@@ -84,7 +107,13 @@ Solana explorer before trusting a new pair's output.
   with an actual fee/slippage model.
 - Raydium quotes use constant-product math against reported reserves, which
   is approximate for CLMM pools.
-- Only "standard" (non-adaptive-fee) Orca Whirlpools are checked.
+- Two of the Meteora SDKs (`@meteora-ag/dlmm`, `@meteora-ag/dynamic-amm-sdk`)
+  ship ESM/CJS interop bugs in their published builds - `src/dex/meteoraDlmmClient.ts`
+  and `src/dex/meteoraDynamicAmmClient.ts` have comments explaining the
+  specific workarounds. `package.json` also pins a single `@solana/web3.js`
+  version tree-wide via `overrides`, since one of these packages bundles a
+  mismatched nested copy that otherwise breaks TypeScript's structural
+  typing between SDKs.
 - This bot never executes trades. Going from detection to live execution on
   Solana mainnet involves real risk: slippage between the two legs,
   transaction failures leaving you part-filled, MEV/front-running, and
