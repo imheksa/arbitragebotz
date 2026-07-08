@@ -127,3 +127,56 @@ Solana explorer before trusting a new pair's output.
 - `npm start` — run once (no watch)
 - `npm run build` — compile to `dist/`
 - `npm run typecheck` — type-check without emitting
+
+## Running on a server / cloud (not your laptop)
+
+This is a long-running polling process (not a web server), so it's meant
+to run as a background worker with a restart policy, not a one-shot
+deploy. The repo includes a `Dockerfile`, which works the same way on a
+plain VPS, Fly.io, Railway, Render (as a "background worker"), or any
+other container platform — you don't need to install Node.js on the host
+at all, only Docker.
+
+> The `npm run build` → `node dist/index.js` path the Dockerfile uses was
+> verified directly in this sandbox (compiles cleanly, runs identically to
+> `npm run dev`). The `docker build` step itself could not be run here,
+> since this sandbox's network policy also blocks Docker Hub / registry
+> pulls - build it once on your own machine or platform before trusting
+> it.
+
+### Plain VPS (systemd-managed Docker, or any host with Docker + docker-compose)
+
+```bash
+git clone <this-repo-url>
+cd arbitragebotz
+cp .env.example .env
+# edit .env - at minimum set SOLANA_RPC_URL to a real RPC endpoint
+docker compose up -d --build
+docker compose logs -f
+```
+
+`docker-compose.yml` sets `restart: unless-stopped` (survives reboots once
+Docker itself is enabled at boot, e.g. `systemctl enable docker`) and
+mounts `./logs` on the host so the opportunity log survives container
+restarts/rebuilds.
+
+To update after pulling new code: `docker compose up -d --build` again.
+
+### Railway / Render / Fly.io (Dockerfile-based platforms)
+
+These all auto-detect the `Dockerfile` when you point them at the repo:
+
+- **Railway**: New Project → Deploy from GitHub repo → it builds the
+  Dockerfile automatically. Add the `.env.example` variables under
+  Project → Variables. Railway restarts the process on crash by default.
+- **Render**: New → Background Worker → connect the repo → it builds the
+  Dockerfile automatically (background worker, not "Web Service", since
+  this process doesn't listen on a port). Add env vars under Environment.
+- **Fly.io**: `fly launch` (accept the detected Dockerfile, decline
+  Postgres/Redis prompts), then `fly secrets set SOLANA_RPC_URL=...` for
+  each `.env.example` variable, then `fly deploy`.
+
+In all three cases, watch the platform's log stream after the first
+deploy the same way you'd watch `npm run dev` locally, and confirm you're
+seeing real quotes (not the "Cannot reach SOLANA_RPC_URL" error) before
+trusting it.
