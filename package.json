@@ -1,0 +1,39 @@
+{
+  "name": "arbitragebotz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solana inter-DEX arbitrage detection bot (simulation mode)",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "~0.32.1",
+    "@ellipsis-labs/phoenix-sdk": "^2.0.3",
+    "@meteora-ag/dlmm": "^1.9.11",
+    "@meteora-ag/dynamic-amm-sdk": "^1.4.1",
+    "@orca-so/common-sdk": "^0.7.1",
+    "@orca-so/whirlpools-sdk": "^0.21.0",
+    "@raydium-io/raydium-sdk-v2": "^0.2.58-alpha",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "bn.js": "^5.2.1",
+    "decimal.js": "^10.5.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/node": "^20.14.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "@solana/web3.js": "^1.98.4"
+  }
+}
